@@ -19,6 +19,12 @@
  *      contact@openairinterface.org
  */
 
+/*
+ * Author: Abdelkader Mekrache <mekrache@eurecom.fr>
+ * Author: Arina Prostakova    <prostako@eurecom.fr>
+ * Description: This file contains amf notifications controller.
+ */
+
 package sbi
 
 import (
@@ -29,28 +35,28 @@ import (
 	"strings"
 )
 
-//------------------------------------------------------------------------------
-// ApiSmfController binds http requests to an api service and writes the service results to the http response
-type ApiSmfController struct {
-	service      ApiSmfServicer
+// ------------------------------------------------------------------------------
+// ApiAmfController binds http requests to an api service and writes the service results to the http response
+type ApiAmfController struct {
+	service      ApiAmfServicer
 	errorHandler ErrorHandler
 }
 
-// ApiSmfOption for how the controller is set up.
-type ApiSmfOption func(*ApiSmfController)
+// ApiAmfOption for how the controller is set up.
+type ApiAmfOption func(*ApiAmfController)
 
-//------------------------------------------------------------------------------
-// WithApiSmfErrorHandler inject ErrorHandler into controller
-func WithApiSmfErrorHandler(h ErrorHandler) ApiSmfOption {
-	return func(c *ApiSmfController) {
+// ------------------------------------------------------------------------------
+// WithApiAmfErrorHandler inject ErrorHandler into controller
+func WithApiAmfErrorHandler(h ErrorHandler) ApiAmfOption {
+	return func(c *ApiAmfController) {
 		c.errorHandler = h
 	}
 }
 
-//------------------------------------------------------------------------------
-// NewApiSmfController creates a default api controller
-func NewApiSmfController(s ApiSmfServicer, opts ...ApiSmfOption) Router {
-	controller := &ApiSmfController{
+// ------------------------------------------------------------------------------
+// NewApiAmfController creates a default api controller
+func NewApiAmfController(s ApiAmfServicer, opts ...ApiAmfOption) Router {
+	controller := &ApiAmfController{
 		service:      s,
 		errorHandler: DefaultErrorHandler,
 	}
@@ -62,24 +68,23 @@ func NewApiSmfController(s ApiSmfServicer, opts ...ApiSmfOption) Router {
 	return controller
 }
 
-//------------------------------------------------------------------------------
-// Routes returns all the api routes for the ApiSmfController
-func (c *ApiSmfController) Routes() Routes {
+// ------------------------------------------------------------------------------
+// Routes returns all the api routes for the ApiAmfController
+func (c *ApiAmfController) Routes() Routes {
 	return Routes{
 		{
-			"PostSmfNotification",
+			"PostAmfNotification",
 			strings.ToUpper("Post"),
-			os.Getenv("SMF_API_ROUTE"),
-			c.PostSmfNotification,
+			os.Getenv("AMF_API_ROUTE"),
+			c.PostAmfNotification,
 		},
 	}
 }
 
-//------------------------------------------------------------------------------
-// PostSmfNotification - Post Smf Notification
-func (c *ApiSmfController) PostSmfNotification(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Received notification from Smf")
-
+// ------------------------------------------------------------------------------
+// PostAmfNotification - Post Amf Notification
+func (c *ApiAmfController) PostAmfNotification(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Received notification from Amf")
 	// Read the JSON Body of the AMF Notification
 	jsonBody, err := ioutil.ReadAll(r.Body)
 	r.Body.Close()
@@ -87,8 +92,7 @@ func (c *ApiSmfController) PostSmfNotification(w http.ResponseWriter, r *http.Re
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-
-	result, err := c.service.StoreSmfNotificationOnDB(r.Context(), jsonBody)
+	result, err := c.service.StoreAmfNotificationOnDB(r.Context(), jsonBody)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)

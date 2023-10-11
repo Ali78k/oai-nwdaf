@@ -19,6 +19,12 @@
  *      contact@openairinterface.org
  */
 
+/*
+ * Author: Abdelkader Mekrache <mekrache@eurecom.fr>
+ * Author: Arina Prostakova    <prostako@eurecom.fr>
+ * Description: This file contains functions to store the notifications from AMF in DB.
+ */
+
 package sbi
 
 import (
@@ -27,23 +33,20 @@ import (
 	"errors"
 	"log"
 	"net/http"
-	"os"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"go.mongodb.org/mongo-driver/mongo/readpref"
 
-	amf_client "gitlab.eurecom.fr/development/oai-nwdaf/components/oai-nwdaf-sbi/pkg/amfclient"
+	amf_client "gitlab.eurecom.fr/development/oai-nwdaf/components/oai-nwdaf-sbi/internal/amfclient"
 )
 
-//------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------
 // ApiAmfService is a service that implements the logic for the ApiAmfServicer
 type ApiAmfService struct {
 }
 
-//------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------
 // ApiSbiService is a service that implements the logic for the ApiSbiServicer
 type ApiSbiService struct {
 }
@@ -63,96 +66,65 @@ type lossOfConnectReason struct {
 	TimeStamp           int64
 }
 
-//------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------
 // NewApiAmfService creates a default api service
 func NewApiAmfService() ApiAmfServicer {
 	return &ApiAmfService{}
 }
 
-//------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------
 // StoreAmfNotificationOnDB - Store event notification related to AMF in the Database.
-func (s *ApiAmfService) StoreAmfNotificationOnDB(ctx context.Context, amfNotificationJson []byte) (ImplResponse, error) {
-
-	// connect to Mongo DB
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI(os.Getenv("MONGODB_URI")))
-	log.Printf("Connected to Mongo DB")
-
-	defer func() {
-		if err = client.Disconnect(ctx); err != nil {
-			log.Fatal(err)
-		}
-	}()
-
-	// verify mongo connection
-	ctx, cancel = context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	err = client.Ping(ctx, readpref.Primary())
-	if err != nil {
-		return Response(http.StatusBadRequest, nil), err
-	}
-
+func (s *ApiAmfService) StoreAmfNotificationOnDB(
+	ctx context.Context,
+	amfNotificationJson []byte,
+) (ImplResponse, error) {
 	// specify DB and collection names for AMF notifications
-	amfCollection := client.Database(os.Getenv("MONGODB_DATABASE_NAME")).Collection(os.Getenv("MONGODB_COLLECTION_NAME_AMF"))
-
-	// specify the Upsert option to insert a new document if a document matching
-	// the filter isn't found.
+	databaseName := config.Database.DbName
+	collectionName := config.Database.CollectionAmfName
+	amfCollection := mongoClient.Database(databaseName).Collection(collectionName)
 	opts := options.Update().SetUpsert(true)
-
 	var amfNotification *amf_client.AmfEventNotification
-
-	// unmarshal JSON to AMF event notification
-	err = json.Unmarshal(amfNotificationJson, &amfNotification)
+	err := json.Unmarshal(amfNotificationJson, &amfNotification)
 	if err != nil {
 		return Response(http.StatusBadRequest, nil), err
 	}
-
-	// get list of AMF event reports
 	reportList, ok := amfNotification.GetReportListOk()
 	if !ok {
 		return Response(http.StatusBadRequest, nil), err
 	}
-
-	// store reports one by one
 	for _, report := range reportList {
 		oid := report.GetSupi()
 		if oid == "" {
-			return Response(http.StatusBadRequest, nil), errors.New("supi not found in report, cannot create object id")
+			return Response(http.StatusBadRequest, nil),
+				errors.New("supi not found in report, cannot create object id")
 		}
-
 		update, err := getUpdateByReport(report)
 		if err != nil {
 			return Response(http.StatusBadRequest, nil), err
 		}
-
-		// Update/Insert the AMF notification report
-		ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		res, err := amfCollection.UpdateByID(ctx, oid, update, opts)
 		if err != nil {
 			return Response(http.StatusBadRequest, nil), err
 		}
-
 		if res.MatchedCount != 0 {
 			log.Println("matched and updated an existing notification report from Amf")
 			return Response(http.StatusOK, nil), nil
 		}
 		if res.UpsertedCount != 0 {
-			log.Printf("inserted a new notification report from Amf with ID %v\n", res.UpsertedID)
+			log.Printf("inserted a new notification report from Amf with ID %v\n",
+				res.UpsertedID)
 		}
 	}
-
 	return Response(http.StatusOK, nil), nil
 }
 
-//------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------
 // getUpdateByReport - Return update bson.D by report
 func getUpdateByReport(report amf_client.AmfEventReport) (bson.D, error) {
-
 	var update bson.D
 	var err error
-	// TODO: implement other report types
 	switch report.GetType() {
 	case amf_client.AMFEVENTTYPEANYOF_REGISTRATION_STATE_REPORT:
 		update, err = getUpdateRegistration(report)
@@ -167,11 +139,10 @@ func getUpdateByReport(report amf_client.AmfEventReport) (bson.D, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	return update, nil
 }
 
-//------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------
 // getUpdateRegistration - Create update bson.D in case of registration
 func getUpdateRegistration(report amf_client.AmfEventReport) (bson.D, error) {
 	rmInfoList, ok := report.GetRmInfoListOk()
@@ -180,12 +151,22 @@ func getUpdateRegistration(report amf_client.AmfEventReport) (bson.D, error) {
 	}
 	timeStamp := time.Now().Unix()
 	// TODO: fix (get rid of) the "RmStateAnyOf" field
-	push := rmInfo{RmInfo: rmInfoList[len(rmInfoList)-1], TimeStamp: timeStamp}
-	update := bson.D{{"$set", bson.D{{"lastmodified", timeStamp}}}, {"$push", bson.M{"rminfolist": &push}}}
+	push := rmInfo{
+		RmInfo:    rmInfoList[len(rmInfoList)-1],
+		TimeStamp: timeStamp,
+	}
+	update := bson.D{
+		{"$set", bson.D{
+			{"lastmodified", timeStamp},
+		}},
+		{"$push", bson.M{
+			"rminfolist": &push,
+		}},
+	}
 	return update, nil
 }
 
-//------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------
 // getUpdateLocation - Create update bson.D in case of Location
 func getUpdateLocation(report amf_client.AmfEventReport) (bson.D, error) {
 	locationObj, ok := report.GetLocationOk()
@@ -194,11 +175,18 @@ func getUpdateLocation(report amf_client.AmfEventReport) (bson.D, error) {
 	}
 	timeStamp := time.Now().Unix()
 	push := location{UserLocation: *locationObj, TimeStamp: timeStamp}
-	update := bson.D{{"$set", bson.D{{"lastmodified", timeStamp}}}, {"$push", bson.M{"locationlist": &push}}}
+	update := bson.D{
+		{"$set", bson.D{
+			{"lastmodified", timeStamp},
+		}},
+		{"$push", bson.M{
+			"locationlist": &push,
+		}},
+	}
 	return update, nil
 }
 
-//------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------
 // getUpdateLossOfConnectivity - Create update bson.D in case of Loss of connectivity
 func getUpdateLossOfConnectivity(report amf_client.AmfEventReport) (bson.D, error) {
 	lossOfConnectReasonObj, ok := report.GetLossOfConnectReasonOk()
@@ -206,7 +194,17 @@ func getUpdateLossOfConnectivity(report amf_client.AmfEventReport) (bson.D, erro
 		return nil, errors.New("failed to get lossOfConnectReason")
 	}
 	timeStamp := time.Now().Unix()
-	push := lossOfConnectReason{LossOfConnectReason: *lossOfConnectReasonObj.LossOfConnectivityReasonAnyOf, TimeStamp: timeStamp}
-	update := bson.D{{"$set", bson.D{{"lastmodified", timeStamp}}}, {"$push", bson.M{"lossofconnectreasonlist": &push}}}
+	push := lossOfConnectReason{
+		LossOfConnectReason: *lossOfConnectReasonObj.LossOfConnectivityReasonAnyOf,
+		TimeStamp:           timeStamp,
+	}
+	update := bson.D{
+		{"$set", bson.D{
+			{"lastmodified", timeStamp},
+		}},
+		{"$push", bson.M{
+			"lossofconnectreasonlist": &push,
+		}},
+	}
 	return update, nil
 }

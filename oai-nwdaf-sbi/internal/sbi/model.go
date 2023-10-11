@@ -25,26 +25,35 @@
  * Description: This file contains data structures and global variables.
  */
 
-package engine
+package sbi
 
 import (
-	"time"
-
+	smf_client "gitlab.eurecom.fr/development/oai-nwdaf/components/oai-nwdaf-sbi/internal/smfclient"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
 // Global variable
 var mongoClient *mongo.Client
-var config EngineConfig
+var config SbiConfig
 
 // ------------------------------------------------------------------------------
 // Type of EngineConfig structure
-type EngineConfig struct {
-	Routes struct {
-		NumOfUe       string `envconfig:"ENGINE_NUM_OF_UE_ROUTE"`
-		SessSuccRatio string `envconfig:"ENGINE_SESS_SUCC_RATIO_ROUTE"`
-		UeComm        string `envconfig:"ENGINE_UE_COMMUNICATION_ROUTE"`
-		UeMob         string `envconfig:"ENGINE_UE_MOBILITY_ROUTE"`
+type SbiConfig struct {
+	Amf struct {
+		IpAddr            string `envconfig:"AMF_IP_ADDR"`
+		SubRoute          string `envconfig:"AMF_SUBSCR_ROUTE"`
+		ApiRoute          string `envconfig:"AMF_API_ROUTE"`
+		NotifCorrId       string `envconfig:"AMF_NOTIFY_CORRELATION_ID"`
+		NotifId           string `envconfig:"AMF_NOTIFICATION_ID"`
+		NorifForwardRoute string `envconfig:"AMF_NOTIFICATION_FORWARD_ROUTE"`
+	}
+	Smf struct {
+		IpAddr            string `envconfig:"SMF_IP_ADDR"`
+		SubRoute          string `envconfig:"SMF_SUBSCR_ROUTE"`
+		ApiRoute          string `envconfig:"SMF_API_ROUTE"`
+		NotifCorrId       string `envconfig:"SMF_NOTIFY_CORRELATION_ID"`
+		NotifId           string `envconfig:"SMF_NOTIFICATION_ID"`
+		NorifForwardRoute string `envconfig:"SMF_NOTIFICATION_FORWARD_ROUTE"`
 	}
 	Database struct {
 		Uri               string `envconfig:"MONGODB_URI"`
@@ -52,50 +61,40 @@ type EngineConfig struct {
 		CollectionAmfName string `envconfig:"MONGODB_COLLECTION_NAME_AMF"`
 		CollectionSmfName string `envconfig:"MONGODB_COLLECTION_NAME_SMF"`
 	}
+	Server struct {
+		NotifUri string `envconfig:"EVENT_NOTIFY_URI"`
+		Uri      string `envconfig:"SERVER_ADDR"`
+	}
 }
 
 // ------------------------------------------------------------------------------
-// Type of network_performance data to request engine
-type EngineReqData struct {
-	StartTs time.Time `json:"startTs,omitempty"`
-	EndTs   time.Time `json:"endTs,omitempty"`
-	Tais    []Tai     `json:"tais,omitempty"`
-	Dnns    []string  `json:"dnns,omitempty"`
-	Snssaia []Snssai  `json:"snssaia,omitempty"`
-	Supi    string    `json:"supi,omitempty"`
+// ApiSmfService is a service that implements the logic for the ApiSmfServicer
+type ApiSmfService struct {
 }
 
-type Tai struct {
-	PlmnId PlmnId `json:"plmnId"`
-	Tac    string `json:"tac"`
-	Nid    string `json:"nid,omitempty"`
+type pduSesEst struct {
+	AdIpv4Addr  *string
+	Dnn         *string
+	PduSeId     *int32
+	PduSessType *smf_client.PduSessionType
+	Snssai      *smf_client.Snssai
+	TimeStamp   int64
 }
 
-type PlmnId struct {
-	Mcc string `json:"mcc"`
-	Mnc string `json:"mnc"`
+type ueIpCh struct {
+	AdIpv4Addr *string
+	PduSeId    *int32
+	TimeStamp  int64
 }
 
-type Snssai struct {
-	Sst int32  `json:"sst"`
-	Sd  string `json:"sd,omitempty"`
+type ddds struct {
+	DddStatus *smf_client.DlDataDeliveryStatus
+	PduSeId   *int32
+	TimeStamp int64
 }
 
-// ------------------------------------------------------------------------------
-// Type of network_performance response from engine.
-type NwPerfResp struct {
-	RelativeRatio int32 `json:"relativeRatio,omitempty"`
-	AbsoluteNum   int32 `json:"absoluteNum,omitempty"`
-	Confidence    int32 `json:"confidence,omitempty"`
-}
-
-// ------------------------------------------------------------------------------
-// Type of Ue_communication response from engine.
-type UeCommResp struct {
-	CommDur       int32     `json:"commDur"`
-	Ts            time.Time `json:"ts,omitempty"`
-	UlVol         int64     `json:"ulVol,omitempty"`
-	UlVolVariance float32   `json:"ulVolVariance,omitempty"`
-	DlVol         int64     `json:"dlVol,omitempty"`
-	DlVolVariance float32   `json:"dlVolVariance,omitempty"`
+type qosMon struct {
+	Customized_data *smf_client.CustomizedData
+	PduSeId         *int32
+	TimeStamp       int64
 }

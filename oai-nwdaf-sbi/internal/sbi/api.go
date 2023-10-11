@@ -19,6 +19,12 @@
  *      contact@openairinterface.org
  */
 
+/*
+ * Author: Abdelkader Mekrache <mekrache@eurecom.fr>
+ * Author: Arina Prostakova    <prostako@eurecom.fr>
+ * Description: This file contains the oai-nwdaf-sbi api types definitions.
+ */
+
 package sbi
 
 import (
@@ -26,32 +32,18 @@ import (
 	"net/http"
 )
 
-// ApiAmfRouter defines the required methods for binding the api requests to a responses for the ApiAmf
-// The ApiAmfRouter implementation should parse necessary information from the http request,
-// pass the data to a ApiAmfServicer to perform the required actions, then write the service results to the http response.
 type ApiAmfRouter interface {
 	PostAmfNotification(http.ResponseWriter, *http.Request)
 }
 
-// ApiSmfRouter defines the required methods for binding the api requests to a responses for the ApiSmf
-// The ApiSmfRouter implementation should parse necessary information from the http request,
-// pass the data to a ApiSmfServicer to perform the required actions, then write the service results to the http response.
 type ApiSmfRouter interface {
 	PostSmfNotification(http.ResponseWriter, *http.Request)
 }
 
-// ApiAmfServicer defines the api actions for the ApiAmf service
-// This interface intended to stay up to date with the openapi yaml used to generate it,
-// while the service implementation can be ignored with the .openapi-generator-ignore file
-// and updated with the logic required for the API.
 type ApiAmfServicer interface {
 	StoreAmfNotificationOnDB(context.Context, []byte) (ImplResponse, error)
 }
 
-// ApiSmfServicer defines the api actions for the ApiSmf service
-// This interface intended to stay up to date with the openapi yaml used to generate it,
-// while the service implementation can be ignored with the .openapi-generator-ignore file
-// and updated with the logic required for the API.
 type ApiSmfServicer interface {
 	StoreSmfNotificationOnDB(context.Context, []byte) (ImplResponse, error)
 }
